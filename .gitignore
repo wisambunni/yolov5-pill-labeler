@@ -3,3 +3,5 @@ __pycache__/*
 *.zip
 ePillID_data/*
 labels/*
+*.txt
+*.jpeg
