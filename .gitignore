@@ -1,0 +1,7 @@
+__pycache__/*
+*.pyc
+*.zip
+ePillID_data/*
+labels/*
+*.txt
+*.jpeg
