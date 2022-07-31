@@ -1,68 +1,132 @@
-from fileinput import filename
-from hashlib import new
+import argparse
 from PIL import Image, ImageDraw
 import os
-from matplotlib.pyplot import text
 from numpy import inf
+import logging
 
-from constants import IMG_DIR
+from constants import CENTER_X, CENTER_Y, CLASS_ID, WIDTH_X
 
-# IMG_NAME = '0006-9117_0_0.jpg'
-# IMG_NAME = '66993-057_0_1.jpg'
-IMG_NAME = '0002-4464_0_0.jpg'
+logging.basicConfig(level=logging.INFO)
 
-def scan(img, width, height):
+
+def scan(img, width, height, threshold=30):
+    '''
+    Scans an image from left to right, top to bottom.
+    Returns the location of the top y axis of a pill in the image.
+
+    :param img: Image to scan
+    :type img: tuple(int, int, int)
+
+    :param width: Width of image
+    :type width: int
+
+    :param height: Height of image
+    :type height: int
+
+    :param threshold: Cutoff to distinct object from a black background
+    :type threshold: int
+
+    :return: Location of the top y axis of a pill in img
+    :rtype: int
+    '''
     for y in range(height):
         for x in range(width):
-            r = img[x, y][0]
-            g = img[x, y][1]
-            b = img[x, y][2]
+            r, g, b = img[x, y]
 
-            if (r > 30 and g > 30 and b > 30):
-                return x, y
+            if (r > threshold and g > threshold and b > threshold):
+                return y
 
-    return inf, inf
+    # If an image consists of a solid black color with no object
+    return inf
 
 
-def transform_to_label(height, y):
+def calc_relative_height(height, y):
+    '''
+    Converts pixels to a value between 0.0-1.0
+    This value will be used to determine the height of the object
+    in the training data.
+
+    :param height: Height of image in pixels
+    :type height: int
+
+    :param y: top y pixel value of the object
+    :type y: int
+
+    :return: Height of the object in 0-1.0
+    :rtype: float
+    '''
     center = height/2
-    shape_width = (center-y)*2
+    shape_height = (center-y)*2
 
-    return shape_width/height
+    return shape_height/height
 
-def create_label_file(IMG_NAME, transform):
-    new_name = os.path.splitext(IMG_NAME)[0]
-    file_name = 'D:\Projects\yolov5-pill-labeler\\files\%s.txt' % new_name
-    text_file = open(file_name,"w")
 
-    text_file.write(f"0 0.5 0.5 1.0 {transform}")
-    text_file.close()
-    return
+def create_label_file(img_name, height_y, output_dir):
+    '''
+    Creates a label file for a pill image
+
+    :param img_name: Name of image
+    :type: img_name: str
+
+    :param height_y: height of object along the y axis
+    :type height_y: float
+
+    :output_dir: Location to store the ouptut label
+    :type output_dir: str
+
+    :return: File name and direcotry of the output
+    :rtype: str
+    '''
+    file_name = f'{os.path.splitext(img_name)[0]}.txt'
+    output_file_name = os.path.join(output_dir, file_name)
+
+    with open(output_file_name, 'w') as outfile:
+        label = f'{CLASS_ID} {CENTER_X} {CENTER_Y} {WIDTH_X} {height_y}'
+        outfile.write(label)
+
+    return output_file_name
+
 
 def main():
-    IMG_PATH = os.path.join(IMG_DIR, IMG_NAME)
+    parser = argparse.ArgumentParser(
+        description='Create labels for pill data set')
 
-    img = Image.open(IMG_PATH)
+    parser.add_argument(
+        '--img_dir', help='Image directory of pill data set', required=True)
+    parser.add_argument(
+        '--label_out', help='Output directory to place the labels', required=True)
 
-    loaded_img = img.load()
+    args = parser.parse_args()
+    BASE_IMG_DIR = args.img_dir
+    LABEL_DIR = args.label_out
 
-    x, y = scan(loaded_img, img.width, img.height)
+    images = os.listdir(BASE_IMG_DIR)
 
-    # To draw the shapes around the pill
-    # draw = ImageDraw.Draw(img)
-    # draw.line((0, y, img.width, y))
-    # draw.line((0, img.height-y, img.width, img.height-y))
-    # img.show()
-    
-    transform = transform_to_label(img.height, y)
+    for file in images:
+        logging.info(f'Processing {file}')
+        img_path = os.path.join(BASE_IMG_DIR, file)
+        img = Image.open(img_path)
 
-    create_file = create_label_file(IMG_NAME, transform)
+        loaded_img = img.load()
 
-    # print(x, y)
+        y = scan(loaded_img, img.width, img.height)
+        logging.debug(f'Found y: {y}px')
 
-    # print(transform)
+        relative_height = calc_relative_height(img.height, y)
+        logging.debug(f'Relative y: {relative_height}')
+
+        create_label_file(file, relative_height, LABEL_DIR)
+
+        logging.info(f'Created label')
+        print()
+
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            # To draw the shapes around the pill
+            draw = ImageDraw.Draw(img)
+            draw.line((0, y, img.width, y))
+            draw.line((0, img.height-y, img.width, img.height-y))
+            img.show()
 
 
 if __name__ == '__main__':
     main()
-
