@@ -1,0 +1,1 @@
+IMG_DIR = r'C:\Users\Karam\Downloads\archive (2)\ePillID_data\classification_data\segmented_nih_pills_224'
